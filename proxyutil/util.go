@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/AdguardTeam/golibs/log"
@@ -97,6 +98,24 @@ func DecodeLatin1(reader io.Reader) (str string, err error) {
 	}
 
 	return string(b), nil
+}
+
+// DialProxy connects to the given address via the given proxy.
+func DialProxy(dialer *net.Dialer, proxyURL *url.URL, addr string) (net.Conn, error) {
+	proxyConn, err := dialer.Dial("tcp", proxyURL.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	// Complete the CONNECT request between a client and a proxy.
+	connectReq := "CONNECT " + addr + " HTTP/1.1\r\nHost: " + addr + "\r\n\r\n"
+	_, err = proxyConn.Write([]byte(connectReq))
+	if err != nil {
+		proxyConn.Close()
+		return nil, err
+	}
+
+	return proxyConn, nil
 }
 
 // EncodeLatin1 encodes the string as a byte array using Latin1.

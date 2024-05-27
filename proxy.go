@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,9 @@ type Proxy struct {
 	invalidTLSHosts   map[string]bool
 	invalidTLSHostsMu sync.RWMutex
 
+	// Configurator for upstream proxy
+	upstreamRules []UpstreamRules
+
 	// Config is the proxy's configuration.
 	// TODO(ameshkov): make it a field.
 	Config
@@ -87,6 +91,7 @@ func NewProxy(config Config) *Proxy {
 		timeout:         defaultTimeout,
 		invalidTLSHosts: map[string]bool{},
 		closing:         make(chan bool),
+		upstreamRules:   config.UpstreamRules,
 	}
 	proxy.dial = (&net.Dialer{
 		Timeout:   dialTimeout,
@@ -660,6 +665,20 @@ func (p *Proxy) connect(session *Session, proto string, addr string) (conn net.C
 		}
 	}
 
+	// Check if we need to use upstream proxy
+	if upstream, useUpstream := p.getUpstreamProxyFor(session.req); useUpstream {
+		dialer := &net.Dialer{
+			Timeout:   dialTimeout,
+			KeepAlive: dialTimeout,
+		}
+
+		proxyConn, err := proxyutil.DialProxy(dialer, upstream, addr)
+		if err != nil {
+			return nil, err
+		}
+		return proxyConn, nil
+	}
+
 	host, _, err := net.SplitHostPort(addr)
 	if err == nil && host == p.APIHost {
 		log.Debug("id=%s: connecting to the API host, return dummy connection", session.ID())
@@ -668,6 +687,31 @@ func (p *Proxy) connect(session *Session, proto string, addr string) (conn net.C
 	}
 
 	return p.dial(proto, addr)
+}
+
+func (p *Proxy) getUpstreamProxyFor(req *http.Request) (*url.URL, bool) {
+	for _, rule := range p.upstreamRules {
+		matchesHost := rule.Host == "" || strings.Contains(req.Host, rule.Host)
+		matchesPath := rule.Path == "" || strings.HasPrefix(req.RequestURI, rule.Path)
+		//matchesHeaders := true
+
+		//for key, value := range rule.Headers {
+		//	if req.Header.Get(key) != value {
+		//		matchesHeaders = false
+		//		break
+		//	}
+		//}
+
+		if matchesHost && matchesPath {
+			upstream, err := url.Parse(rule.ProxyURL)
+			if err != nil {
+				log.Debug("invalid upstream proxy URL for rule: %v", err)
+				continue
+			}
+			return upstream, true
+		}
+	}
+	return nil, false
 }
 
 // prepareRequest prepares an HTTP request to be sent to the remote server.

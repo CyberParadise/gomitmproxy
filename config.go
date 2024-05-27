@@ -82,5 +82,13 @@ type Config struct {
 
 	// OnError is called if there's an issue with retrieving the response from
 	// the remote server.
-	OnError OnErrorFunc
+	OnError       OnErrorFunc
+	UpstreamRules []UpstreamRules // list of upstream rules
+}
+
+// UpstreamRules defines the structure for rules.
+type UpstreamRules struct {
+	Host     string // for domain-based routing
+	Path     string // for path-based routing
+	ProxyURL string // the upstream proxy URL
 }

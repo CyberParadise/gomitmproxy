@@ -30,7 +30,7 @@ func main() {
 	}()
 
 	// Read the MITM cert and key.
-	tlsCert, err := tls.LoadX509KeyPair("demo.crt", "demo.key")
+	tlsCert, err := tls.LoadX509KeyPair("/home/god/Work/Go/gomitmproxy/examples/mitm/demo.crt", "/home/god/Work/Go/gomitmproxy/examples/mitm/demo.key")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -76,6 +76,10 @@ func main() {
 		Username: "user",
 		Password: "pass",
 		APIHost:  "gomitmproxy",
+
+		UpstreamRules: []gomitmproxy.UpstreamRules{
+			//{"api.ipstack.com", "check", "http://localhost:8000"},
+		},
 
 		MITMConfig:     mitmConfig,
 		MITMExceptions: []string{"example.com"},
